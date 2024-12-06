@@ -100,8 +100,11 @@ public:
     curl_easy_setopt(curl_handle.handle, CURLOPT_FOLLOWLOCATION, true);
 
     CURLcode res = curl_easy_perform(curl_handle.handle);
-    if (res != 0) {
+    if (res != 0 && !last_status_.ok()) {
       throw std::runtime_error(last_status_.ToString());
+    } else {
+      throw std::runtime_error(std::string("curl error : ") +
+                               curl_easy_strerror(res));
     }
 
     curl_easy_cleanup(curl_handle.handle);
@@ -118,7 +121,7 @@ int process_stream(std::string url, std::function<void(uintptr_t)> callback) {
   // Main entry point for processing arrow streams from URLs
   try {
     StreamDecoderWrapper decoderwrapper;
-    return decoderwrapper.ProcessStream(url, callback);
+    return decoderwrapper.ProcessStream(url, std::move(callback));
   } catch (const std::exception &e) {
     fprintf(stderr, "Error processing stream: %s\n", e.what());
     return -1;
