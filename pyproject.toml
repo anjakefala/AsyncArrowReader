@@ -10,7 +10,11 @@ requires-python = ">=3.8"
 [tool.scikit-build]
 cmake.version = ">=3.15"
 wheel.packages = ["prototype"]
-# Tell scikit-build-core to use development mode properly
-editable.mode = "inplace"
+# May need to enable this to tell scikit-build-core to use a specific development mode
+# editable.mode = "inplace"
 # Make sure the compiled module ends up in the right place
 wheel.install-dir = "prototype"
+
+# Make life easy for developers using VSCode/clangd
+[tool.scikit-build.cmake.define]
+CMAKE_EXPORT_COMPILE_COMMANDS = "ON"

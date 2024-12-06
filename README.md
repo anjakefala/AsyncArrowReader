@@ -8,6 +8,7 @@ Setup Guide
 
 # System Dependencies
 
+```shell
 sudo apt-get update
 sudo apt-get install -y     \
     python3-dev             \
@@ -15,16 +16,35 @@ sudo apt-get install -y     \
     build-essential         \
     libcurl4-openssl-dev    \
     libarrow-dev            \
+```
+
+Or on MacOS:
+
+```shell
+brew install apache-arrow cmake curl
+```
 
 # Python dependencies
 
+```shell
 pip install      \
     pyarrow      \
     nanobind     \
-    pytest
+    pytest       \
+    scikit-build-core
+```
 
 # Build
-pip3 install -e . -v
+
+```shell
+pip install .
+
+# Or install in such a way that VSCode/clangd gives nice autocomplete
+pip install -e . -v --config-settings=build-dir=build --no-build-isolation
+```
 
 # Run
+
+```shell
 pytest . -svvv
+```
