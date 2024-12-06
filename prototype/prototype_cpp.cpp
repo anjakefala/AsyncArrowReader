@@ -102,7 +102,7 @@ public:
     CURLcode res = curl_easy_perform(curl_handle.handle);
     if (res != 0 && !last_status_.ok()) {
       throw std::runtime_error(last_status_.ToString());
-    } else {
+    } else if (res != 0) {
       throw std::runtime_error(std::string("curl error : ") +
                                curl_easy_strerror(res));
     }
