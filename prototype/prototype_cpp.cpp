@@ -1,51 +1,58 @@
-#include <nanobind/nanobind.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/function.h>
-#include <curl/curl.h>
 #include <arrow/api.h>
-#include <arrow/ipc/reader.h>
 #include <arrow/c/bridge.h>
+#include <arrow/ipc/reader.h>
 #include <chrono>
-#include <stdexcept>
+#include <curl/curl.h>
 #include <memory>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/function.h>
+#include <nanobind/stl/string.h>
+#include <stdexcept>
 
 using namespace arrow;
 namespace nb = nanobind;
 
-// Simple function to illustrate usage of nanobind
-int get_arrow_version() {
-  return ARROW_VERSION_MAJOR;
-}
+struct CurlHandle {
+  CURL *handle{};
+  ~CurlHandle() {
+    if (handle) {
+      curl_easy_cleanup(handle);
+    }
+  }
+};
 
-// Custom listener that processes Arrow RecordBatches and forwards them to Python
+struct ArrayStreamHandle {
+  ArrowArrayStream stream{};
+  ~ArrayStreamHandle() {
+    if (stream.release) {
+      stream.release(&stream);
+    }
+  }
+};
+
+// Simple function to illustrate usage of nanobind
+int get_arrow_version() { return ARROW_VERSION_MAJOR; }
+
+// Custom listener that processes Arrow RecordBatches and forwards them to
+// Python
 class Listener : public arrow::ipc::Listener {
 private:
   std::function<void(uintptr_t)> callback_;
+
 public:
   Status OnRecordBatchDecoded(std::shared_ptr<RecordBatch> batch) override {
     if (!batch) {
       return Status::Invalid("Received null RecordBatch");
     }
-    ArrowArrayStream* stream = new ArrowArrayStream();
+
+    ArrayStreamHandle stream;
     auto schema = batch->schema();
 
-    auto reader = arrow::RecordBatchReader::Make({batch}, schema);
-    if (!reader.ok()) {
-      return Status::Invalid("Failed to create RecordBatchReader: ", reader.status().ToString());
-    }
+    ARROW_ASSIGN_OR_RAISE(auto reader,
+                          arrow::RecordBatchReader::Make({batch}, schema));
+    ARROW_RETURN_NOT_OK(arrow::ExportRecordBatchReader(reader, &stream.stream));
 
-    auto status = arrow::ExportRecordBatchReader(reader.ValueOrDie(), stream);
-    if (!status.ok()) {
-      delete stream;
-      return status;
-    }
-
-    try {
-      callback_(reinterpret_cast<uintptr_t>(stream));
-    } catch(...) {
-      delete stream;
-      return Status::Invalid("Callback execution failed");
-    }
+    callback_(reinterpret_cast<uintptr_t>(&stream.stream));
 
     return Status::OK();
   }
@@ -60,64 +67,59 @@ class StreamDecoderWrapper {
 private:
   std::unique_ptr<arrow::ipc::StreamDecoder> decoder;
   std::shared_ptr<Listener> listener;
+  Status last_status_;
 
-  static size_t WriteFunction(void *contents, size_t size, size_t nmemb, void *userp) {
-      size_t real_size = size * nmemb;
-      auto decoder = static_cast<arrow::ipc::StreamDecoder*>(userp);
-
-      auto status = decoder->Consume(static_cast<const uint8_t*>(contents), real_size);
-      return status.ok() ? real_size : 0;
+  static size_t WriteFunction(void *contents, size_t size, size_t nmemb,
+                              void *userp) {
+    size_t real_size = size * nmemb;
+    auto decoder_wrapper = static_cast<StreamDecoderWrapper *>(userp);
+    decoder_wrapper->last_status_ = decoder_wrapper->decoder->Consume(
+        static_cast<const uint8_t *>(contents), real_size);
+    return decoder_wrapper->last_status_.ok() ? real_size : 0;
   }
+
 public:
   StreamDecoderWrapper() {
     listener = std::make_shared<Listener>();
     decoder = std::make_unique<arrow::ipc::StreamDecoder>(listener);
   }
 
+  size_t ProcessStream(std::string url,
+                       std::function<void(uintptr_t)> callback) {
 
-  size_t ProcessStream (std::string url, std::function<void(uintptr_t)> callback) {
-
-    CURL *curl_handle;
-    CURLcode res;
+    CurlHandle curl_handle;
 
     curl_global_init(CURL_GLOBAL_ALL);
-    curl_handle = curl_easy_init();
+    curl_handle.handle = curl_easy_init();
 
     listener->SetCallback(callback);
 
-    curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteFunction);
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, this->decoder.get());
-    curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, true);
-  
-    // Perform request and measure time duration of request
-    auto start_time = std::chrono::steady_clock::now();
+    curl_easy_setopt(curl_handle.handle, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl_handle.handle, CURLOPT_WRITEFUNCTION, WriteFunction);
+    curl_easy_setopt(curl_handle.handle, CURLOPT_WRITEDATA, this);
+    curl_easy_setopt(curl_handle.handle, CURLOPT_FOLLOWLOCATION, true);
 
-    res = curl_easy_perform(curl_handle);
-
-    auto end_time = std::chrono::steady_clock::now();
-    auto time_duration = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
-
+    CURLcode res = curl_easy_perform(curl_handle.handle);
     if (res != 0) {
-      throw std::runtime_error(std::string("Curl error: ") + curl_easy_strerror(res));
+      throw std::runtime_error(last_status_.ToString());
     }
 
-    printf("%.2f seconds elapsed\n", time_duration.count());
-
-    curl_easy_cleanup(curl_handle);
+    curl_easy_cleanup(curl_handle.handle);
+    curl_handle.handle = nullptr;
+    // The global cleanup should possibly be separated from this via a separate
+    // function.
     curl_global_cleanup();
 
     return 0;
-    }
-
+  }
 };
 
 int process_stream(std::string url, std::function<void(uintptr_t)> callback) {
   // Main entry point for processing arrow streams from URLs
   try {
-      StreamDecoderWrapper decoderwrapper;
-      return decoderwrapper.ProcessStream(url, callback);
-  } catch (const std::exception& e) {
+    StreamDecoderWrapper decoderwrapper;
+    return decoderwrapper.ProcessStream(url, callback);
+  } catch (const std::exception &e) {
     fprintf(stderr, "Error processing stream: %s\n", e.what());
     return -1;
   }
@@ -126,8 +128,7 @@ int process_stream(std::string url, std::function<void(uintptr_t)> callback) {
 NB_MODULE(prototype_cpp, m) {
   m.doc() = "Module for processing Arrow streams over HTTP";
   m.def("arrow_version", &get_arrow_version,
-          "Returns the major version of Arrow");
-  m.def("process_stream", &process_stream, 
-        nb::arg("url"), nb::arg("callback"),
+        "Returns the major version of Arrow");
+  m.def("process_stream", &process_stream, nb::arg("url"), nb::arg("callback"),
         "Runs a stream decoder test");
 }
