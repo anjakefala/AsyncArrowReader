@@ -46,5 +46,6 @@ pip install -e . -v --config-settings=build-dir=build --no-build-isolation
 # Run
 
 ```shell
-pytest . -svvv
+python3 example.py
 ```
+
