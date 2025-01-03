@@ -16,7 +16,7 @@ sudo apt-get install -y     \
     python3-dev             \
     cmake                   \
     build-essential         \
-    libarrow-dev            \
+    libarrow-dev
 ```
 
 Or on MacOS:
