@@ -20,6 +20,8 @@ sudo apt-get install -y     \
 ```
 
 Or on MacOS:
+Note: See [Install Apache Arrow](https://arrow.apache.org/install/) for instructions on installing Arrow C++ on Linux.
+
 
 ```shell
 brew install apache-arrow cmake curl
