@@ -1,12 +1,14 @@
+# AsyncArrowReader Prototype
+
 Setup Guide
 
-# Prerequisites
+## Prerequisites
 
 * Python 3.8 or later
 * CMake 3.15 or later
 * C++ compiler supporting C++11 or later
 
-# System Dependencies
+## System Dependencies
 
 ```shell
 sudo apt-get update
@@ -23,7 +25,7 @@ Or on MacOS:
 brew install apache-arrow cmake curl
 ```
 
-# Python dependencies
+## Python dependencies
 
 ```shell
 pip install      \
@@ -34,7 +36,7 @@ pip install      \
     scikit-build-core
 ```
 
-# Build
+## Build
 
 ```shell
 pip install .
@@ -43,9 +45,8 @@ pip install .
 pip install -e . -v --config-settings=build-dir=build --no-build-isolation
 ```
 
-# Run
+## Run
 
 ```shell
 python3 example.py
 ```
-
