@@ -31,14 +31,14 @@ brew install apache-arrow cmake curl
 
 ## Python dependencies
 
-```shell
-pip install      \
-    pyarrow      \
-    nanobind     \
-    pytest       \
-    aiohttp     \
-    scikit-build-core
-```
+Python dependencies are defined in [pyproject.toml](./pyproject.toml) and are handled automatically when you run`pip install .`.
+
+The prototype depends on the following packages:
+
+* pyarrow
+* aiohttp
+* nanobind (build only)
+* scikit-build-core (build only)
 
 ## Build
 

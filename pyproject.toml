@@ -6,6 +6,10 @@ build-backend = "scikit_build_core.build"
 name = "prototype"
 version = "0.1.0"
 requires-python = ">=3.8"
+dependencies = [
+  "aiohttp",
+  "pyarrow"
+]
 
 [tool.scikit-build]
 cmake.version = ">=3.15"
