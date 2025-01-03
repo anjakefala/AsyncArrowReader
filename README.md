@@ -14,7 +14,6 @@ sudo apt-get install -y     \
     python3-dev             \
     cmake                   \
     build-essential         \
-    libcurl4-openssl-dev    \
     libarrow-dev            \
 ```
 
@@ -31,6 +30,7 @@ pip install      \
     pyarrow      \
     nanobind     \
     pytest       \
+    aiohttp     \
     scikit-build-core
 ```
 

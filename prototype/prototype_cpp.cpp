@@ -1,8 +1,6 @@
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <arrow/ipc/reader.h>
-#include <chrono>
-#include <curl/curl.h>
 #include <memory>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
@@ -12,15 +10,8 @@
 using namespace arrow;
 namespace nb = nanobind;
 
-struct CurlHandle {
-  CURL *handle{};
-  ~CurlHandle() {
-    if (handle) {
-      curl_easy_cleanup(handle);
-    }
-  }
-};
-
+// Wrapper for ArrowArrayStream with RAII cleanup
+// Ensures the stream is properly released when the handle goes out of scope.
 struct ArrayStreamHandle {
   ArrowArrayStream stream{};
   ~ArrayStreamHandle() {
@@ -33,8 +24,8 @@ struct ArrayStreamHandle {
 // Simple function to illustrate usage of nanobind
 int get_arrow_version() { return ARROW_VERSION_MAJOR; }
 
-// Custom listener that processes Arrow RecordBatches and forwards them to
-// Python
+// Custom Listener class that handles decoded Arrow RecordBatches.
+// Converts each batch to a C Data Interface format and passes it to a Python callback.
 class Listener : public arrow::ipc::Listener {
 private:
   std::function<void(uintptr_t)> callback_;
@@ -49,7 +40,7 @@ public:
     auto schema = batch->schema();
 
     ARROW_ASSIGN_OR_RAISE(auto reader,
-                          arrow::RecordBatchReader::Make({batch}, schema));
+                         arrow::RecordBatchReader::Make({batch}, schema));
     ARROW_RETURN_NOT_OK(arrow::ExportRecordBatchReader(reader, &stream.stream));
 
     callback_(reinterpret_cast<uintptr_t>(&stream.stream));
@@ -63,20 +54,10 @@ public:
 };
 
 class StreamDecoderWrapper {
-  // Wrapper class for arrow::ipc::StreamDecoder with CURL integration
 private:
   std::unique_ptr<arrow::ipc::StreamDecoder> decoder;
   std::shared_ptr<Listener> listener;
   Status last_status_;
-
-  static size_t WriteFunction(void *contents, size_t size, size_t nmemb,
-                              void *userp) {
-    size_t real_size = size * nmemb;
-    auto decoder_wrapper = static_cast<StreamDecoderWrapper *>(userp);
-    decoder_wrapper->last_status_ = decoder_wrapper->decoder->Consume(
-        static_cast<const uint8_t *>(contents), real_size);
-    return decoder_wrapper->last_status_.ok() ? real_size : 0;
-  }
 
 public:
   StreamDecoderWrapper() {
@@ -84,54 +65,49 @@ public:
     decoder = std::make_unique<arrow::ipc::StreamDecoder>(listener);
   }
 
-  size_t ProcessStream(std::string url,
-                       std::function<void(uintptr_t)> callback) {
-
-    CurlHandle curl_handle;
-
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl_handle.handle = curl_easy_init();
-
-    listener->SetCallback(callback);
-
-    curl_easy_setopt(curl_handle.handle, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl_handle.handle, CURLOPT_WRITEFUNCTION, WriteFunction);
-    curl_easy_setopt(curl_handle.handle, CURLOPT_WRITEDATA, this);
-    curl_easy_setopt(curl_handle.handle, CURLOPT_FOLLOWLOCATION, true);
-
-    CURLcode res = curl_easy_perform(curl_handle.handle);
-    if (res != 0 && !last_status_.ok()) {
+  // Consume a buffer of bytes and feed them to the Arrow StreamDecoder
+  // @param data Pointer to buffer containing bytes to consume
+  // @param length Number of bytes to consume
+  // @return Number of bytes consumed
+  // @throws std::runtime_error if the decoder encounters an error
+  size_t ConsumeBytes(const uint8_t* data, size_t length) {
+    last_status_ = decoder->Consume(data, length);
+    if (!last_status_.ok()) {
       throw std::runtime_error(last_status_.ToString());
-    } else if (res != 0) {
-      throw std::runtime_error(std::string("curl error : ") +
-                               curl_easy_strerror(res));
     }
-
-    curl_easy_cleanup(curl_handle.handle);
-    curl_handle.handle = nullptr;
-    // The global cleanup should possibly be separated from this via a separate
-    // function.
-    curl_global_cleanup();
-
-    return 0;
+    return length;
+  }
+  
+  // Set the callback function that will be called when a complete batch is received.
+  // @param callback Function taking a uintptr_t representing a pointer to an ArrowArrayStream
+  void SetCallback(std::function<void(uintptr_t)> callback) {
+    listener->SetCallback(callback);
   }
 };
-
-int process_stream(std::string url, std::function<void(uintptr_t)> callback) {
-  // Main entry point for processing arrow streams from URLs
-  try {
-    StreamDecoderWrapper decoderwrapper;
-    return decoderwrapper.ProcessStream(url, std::move(callback));
-  } catch (const std::exception &e) {
-    fprintf(stderr, "Error processing stream: %s\n", e.what());
-    return -1;
-  }
-}
 
 NB_MODULE(prototype_cpp, m) {
   m.doc() = "Module for processing Arrow streams over HTTP";
   m.def("arrow_version", &get_arrow_version,
         "Returns the major version of Arrow");
-  m.def("process_stream", &process_stream, nb::arg("url"), nb::arg("callback"),
-        "Runs a stream decoder test");
+
+  nb::class_<StreamDecoderWrapper>(m, "StreamDecoderWrapper")
+      .def(nb::init<>())
+      .def("set_callback", &StreamDecoderWrapper::SetCallback,
+           "Set the callback for processing Arrow batches")
+      // Bytes as input
+      .def("consume_bytes", 
+           [](StreamDecoderWrapper& self, const nb::bytes& data) {
+               return self.ConsumeBytes(
+                   reinterpret_cast<const uint8_t*>(data.c_str()),
+                   data.size()
+               );
+           })
+      // Bytearray as input
+      .def("consume_bytes",
+           [](StreamDecoderWrapper& self, const nb::bytearray& data) {
+               return self.ConsumeBytes(
+                   reinterpret_cast<const uint8_t*>(data.data()),
+                   data.size()
+               );
+           });
 }

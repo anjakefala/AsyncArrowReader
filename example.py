@@ -7,7 +7,7 @@ async def main() -> None:
     """Example usage of AsyncArrowClient."""
     url = "https://github.com/apache/arrow-experiments/raw/refs/heads/main/data/arrow-commits/arrow-commits.arrows"
     print(f"Fetching Arrow stream from {url}")
-    reader = fetch_stream(url, verbose=True)
+    reader = await fetch_stream(url, verbose=True)
     batch_count = 0
     row_count = 0
 
@@ -16,6 +16,8 @@ async def main() -> None:
         batch_count += 1
         row_count += len(batch)
         print(f"Processed batch {batch_count} with {len(batch)} rows")
+        await asyncio.sleep(0.01)
+        print(f"Finished processing batch {batch_count}")
     print("Async iteration done")
 
 
