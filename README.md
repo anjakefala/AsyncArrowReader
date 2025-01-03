@@ -57,6 +57,7 @@ docker run prototype
 pip install .
 
 # Or install in such a way that VSCode/clangd gives nice autocomplete
+pip install "scikit-build-core>=0.5.0" "nanobind>=1.5.0" # required for --no-build-isolation
 pip install -e . -v --config-settings=build-dir=build --no-build-isolation
 ```
 
