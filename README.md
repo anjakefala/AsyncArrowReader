@@ -10,6 +10,8 @@ Setup Guide
 
 ## System Dependencies
 
+On Debian/Ubuntu:
+
 ```shell
 sudo apt-get update
 sudo apt-get install -y     \
