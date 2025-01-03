@@ -19,9 +19,9 @@ sudo apt-get install -y     \
     libarrow-dev
 ```
 
-Or on MacOS:
 Note: See [Install Apache Arrow](https://arrow.apache.org/install/) for instructions on installing Arrow C++ on Linux.
 
+Or on macOS:
 
 ```shell
 brew install apache-arrow cmake curl
