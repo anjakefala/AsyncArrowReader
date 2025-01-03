@@ -1,11 +1,12 @@
+#include <memory>
+#include <stdexcept>
+
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <arrow/ipc/reader.h>
-#include <memory>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/string.h>
-#include <stdexcept>
 
 using namespace arrow;
 namespace nb = nanobind;

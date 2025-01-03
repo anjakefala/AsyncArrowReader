@@ -1,9 +1,10 @@
-from .prototype_cpp import StreamDecoderWrapper
-import pyarrow as pa
 import asyncio
-import aiohttp
 from typing import Optional, AsyncIterator, Union
 
+import pyarrow as pa
+import aiohttp
+
+from .prototype_cpp import StreamDecoderWrapper
 
 class AsyncRecordBatchReader:
     """Asynchronous reader for Arrow RecordBatches over IPC."""
