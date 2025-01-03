@@ -8,6 +8,8 @@ Setup Guide
 * CMake 3.15 or later
 * C++ compiler supporting C++11 or later
 
+## Setup
+
 ## System Dependencies
 
 On Debian/Ubuntu:
@@ -29,7 +31,7 @@ Or on macOS:
 brew install apache-arrow cmake curl
 ```
 
-## Python dependencies
+### Python dependencies
 
 Python dependencies are defined in [pyproject.toml](./pyproject.toml) and are handled automatically when you run`pip install .`.
 
@@ -39,6 +41,15 @@ The prototype depends on the following packages:
 * aiohttp
 * nanobind (build only)
 * scikit-build-core (build only)
+
+### Docker
+
+As an alternative to the above steps, a [Dockerfile](./Dockerfile) is provided which builds and runs the prototype.
+
+```sh
+docker build -t prototype .
+docker run prototype
+```
 
 ## Build
 
