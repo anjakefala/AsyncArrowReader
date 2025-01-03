@@ -5,6 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "prototype"
 version = "0.1.0"
+license = { file = "LICENSE" }
 requires-python = ">=3.8"
 dependencies = [
   "aiohttp",
