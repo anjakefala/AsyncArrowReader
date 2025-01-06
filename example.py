@@ -16,7 +16,7 @@ async def main() -> None:
         batch_count += 1
         row_count += len(batch)
         print(f"Processed batch {batch_count} with {len(batch)} rows")
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.01)   # artificially slow down processing to illustrate async reading + writing
         print(f"Finished processing batch {batch_count}")
     print("Async iteration done")
 
