@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.15...3.26)
 project(prototype)
 
 find_package(Arrow REQUIRED)
-find_package(CURL REQUIRED)
 find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 
@@ -17,7 +16,7 @@ nanobind_add_module(
 )
 
 # Link against Arrow's shared library
-target_link_libraries(prototype_cpp PRIVATE Arrow::arrow_shared CURL::libcurl)
+target_link_libraries(prototype_cpp PRIVATE Arrow::arrow_shared)
 
 # For formal installations
 install(TARGETS prototype_cpp
