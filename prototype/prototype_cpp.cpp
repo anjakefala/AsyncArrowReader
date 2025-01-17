@@ -29,9 +29,19 @@ int get_arrow_version() { return ARROW_VERSION_MAJOR; }
 // Converts each batch to a C Data Interface format and passes it to a Python callback.
 class Listener : public arrow::ipc::Listener {
 private:
-  std::function<void(uintptr_t)> callback_;
+  std::function<void(uintptr_t)> batch_callback_;
+  std::function<void(uintptr_t)> schema_callback_;
 
 public:
+  Status OnSchemaDecoded(std::shared_ptr<Schema> schema) override {
+    if (schema_callback_) {
+      struct ArrowSchema c_schema;
+      ARROW_RETURN_NOT_OK(arrow::ExportSchema(*schema, &c_schema));
+
+      schema_callback_(reinterpret_cast<uintptr_t>(&c_schema));
+    }
+    return Status::OK();
+  }
   Status OnRecordBatchDecoded(std::shared_ptr<RecordBatch> batch) override {
     if (!batch) {
       return Status::Invalid("Received null RecordBatch");
@@ -44,13 +54,17 @@ public:
                          arrow::RecordBatchReader::Make({batch}, schema));
     ARROW_RETURN_NOT_OK(arrow::ExportRecordBatchReader(reader, &stream.stream));
 
-    callback_(reinterpret_cast<uintptr_t>(&stream.stream));
+    batch_callback_(reinterpret_cast<uintptr_t>(&stream.stream));
 
     return Status::OK();
   }
 
-  void SetCallback(std::function<void(uintptr_t)> callback) {
-    this->callback_ = callback;
+  void SetSchemaCallback(std::function<void(uintptr_t)> callback) {
+    this->schema_callback_ = callback;
+  }
+
+  void SetBatchCallback(std::function<void(uintptr_t)> callback) {
+    this->batch_callback_ = callback;
   }
 };
 
@@ -81,20 +95,25 @@ public:
   
   // Set the callback function that will be called when a complete batch is received.
   // @param callback Function taking a uintptr_t representing a pointer to an ArrowArrayStream
-  void SetCallback(std::function<void(uintptr_t)> callback) {
-    listener->SetCallback(callback);
+  void SetBatchCallback(std::function<void(uintptr_t)> callback) {
+    listener->SetBatchCallback(callback);
   }
+
+  void SetSchemaCallback(std::function<void(uintptr_t)> callback) {
+      listener->SetSchemaCallback(callback);
+    }
 };
 
 NB_MODULE(prototype_cpp, m) {
   m.doc() = "Module for processing Arrow streams over HTTP";
   m.def("arrow_version", &get_arrow_version,
         "Returns the major version of Arrow");
-
   nb::class_<StreamDecoderWrapper>(m, "StreamDecoderWrapper")
       .def(nb::init<>())
-      .def("set_callback", &StreamDecoderWrapper::SetCallback,
+      .def("set_batch_callback", &StreamDecoderWrapper::SetBatchCallback,
            "Set the callback for processing Arrow batches")
+      .def("set_schema_callback", &StreamDecoderWrapper::SetSchemaCallback,
+          "Set the callback for receiving the Arrow schema")
       // Bytes as input
       .def("consume_bytes", 
            [](StreamDecoderWrapper& self, const nb::bytes& data) {

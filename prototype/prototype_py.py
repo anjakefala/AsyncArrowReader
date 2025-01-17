@@ -33,7 +33,7 @@ class AsyncRecordBatchReader:
         ------
             ValueError: If schema is not yet available
         """
-        await asyncio.wait_for(self.schema)
+        return await self._schema
 
     async def __aiter__(self) -> AsyncIterator[Union[pa.RecordBatch, Exception]]:
         """Iterate over received record batches asynchronously."""
@@ -48,6 +48,17 @@ class AsyncRecordBatchReader:
         finally:
             if self._error:
                 raise self._error
+
+    def _handle_schema(self, schema_ptr):
+        """Handle incoming schema from arrow::ipc::StreamDecoder."""
+        self._log(f"Received schema")
+        try:
+            schema = pa.Schema._import_from_c(schema_ptr)
+
+            self._loop.call_soon_threadsafe(self._schema.set_result, schema)
+        except Exception as e:
+            self._log(f"Error in schema callback: {e}")
+            self._error = e
 
     def _handle_batch(self, ptr):
         """Handle incoming record batch from arrow::ipc::StreamDecoder.
@@ -139,7 +150,8 @@ async def fetch_stream(url: str, verbose: bool = False) -> AsyncRecordBatchReade
     reader = AsyncRecordBatchReader(verbose=verbose)
 
     wrapper = StreamDecoderWrapper()
-    wrapper.set_callback(reader._handle_batch)
+    wrapper.set_batch_callback(reader._handle_batch)
+    wrapper.set_schema_callback(reader._handle_schema)
 
     asyncio.create_task(_read_stream(url, wrapper, reader))
 
