@@ -8,6 +8,10 @@ async def main() -> None:
     url = "https://github.com/apache/arrow-experiments/raw/refs/heads/main/data/arrow-commits/arrow-commits.arrows"
     print(f"Fetching Arrow stream from {url}")
     reader = await fetch_stream(url, verbose=True)
+
+    schema = await reader.schema
+    print(f"Received schema: {schema}")
+
     batch_count = 0
     row_count = 0
 
